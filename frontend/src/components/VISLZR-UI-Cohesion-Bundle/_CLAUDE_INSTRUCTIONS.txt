@@ -1,0 +1,25 @@
+# _CLAUDE_INSTRUCTIONS.txt
+You are applying a VISLZR UI cohesion patch into the user's repo.
+
+GOAL
+- Make VISLZR Canvas nodes + hints cohesive.
+- Eliminate dynamic Tailwind class strings.
+
+STEPS
+1) Unzip the provided bundle.
+2) Copy/merge `Canvas/` into the repo's Canvas component folder (typically `frontend/src/components/Canvas/`).
+3) If the repo already contains `ui/` primitives, do NOT overwrite unless the user requests it. Otherwise, copy `ui/` into `frontend/src/components/ui/` (or equivalent).
+4) Run repo checks:
+   - lint, typecheck, dev build
+5) Confirm visually:
+   - Idea/Hypothesis/Insight/Task nodes share the same shell.
+   - Selection ring is consistent.
+   - TaskProgress node matches the node language.
+   - InlineHint uses cc tokens (no gray-500 / blue-400 body text).
+6) Commit with message: `VISLZR: unify Canvas node styling via NodeShell`
+7) IMPORTANT: After applying, remove the zip file from the Downloads folder (per user preference).
+
+DELIVERABLE
+Reply with:
+[VISLZR UI COHESION COMPLETE]
+and a short summary of what files were changed.

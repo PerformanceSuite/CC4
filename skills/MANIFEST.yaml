@@ -1,0 +1,182 @@
+# Skill Manifest - CommandCenter V3
+# Updated: 2026-01-12 (restored 6 critical skills after knowledge loss incident)
+
+version: "3.0"
+updated: 2026-01-12
+
+# Skill Tiers for Memory Integration
+# HOT: Essence loaded every session (~50 words per skill)
+# WARM: Full skill loaded when keywords match
+# COLD: Detailed examples in visual memory (future)
+
+skills:
+  # P0 - Critical (Always Check)
+  - name: skill-governance
+    path: skills/skill-governance/SKILL.md
+    priority: P0
+    keywords:
+      - skill
+      - archive
+      - consolidate
+      - manifest
+      - governance
+      - institutional
+    file_patterns:
+      - "skills/**"
+      - "skills/MANIFEST.yaml"
+    description: "Meta-skill ensuring skills are checked; prevents knowledge loss from archival"
+
+  - name: damage-control
+    path: skills/damage-control/SKILL.md
+    priority: P0
+    keywords:
+      - autonomous
+      - destructive
+      - safety
+      - hooks
+      - permissions
+      - rm
+      - force
+      - delete
+      - drop
+    file_patterns:
+      - ".claude/hooks/**"
+      - "settings.json"
+    description: "Safety hooks blocking destructive commands (rm -rf, force push, DROP TABLE)"
+
+  - name: context-management
+    path: skills/context-management/SKILL.md
+    priority: P0
+    keywords:
+      - context
+      - tokens
+      - memory
+      - compact
+      - capacity
+      - limit
+    file_patterns: []
+    description: "11 strategies to stay under 50% context capacity; prevents /compact"
+
+  - name: operations
+    path: skills/operations/SKILL.md
+    priority: P0
+    keywords:
+      - pipeline
+      - startup
+      - docker
+      - dagger
+      - execution
+      - agent
+      - autonomous
+      - credentials
+      - oauth
+    file_patterns:
+      - "backend/app/services/agent_service.py"
+      - "backend/app/services/task_executor.py"
+      - "backend/app/services/batch_orchestrator.py"
+      - "backend/app/routers/autonomous.py"
+      - "scripts/*.sh"
+    description: "How to run CC3 - startup, execution modes, pipeline"
+
+  # P1 - Required (Check When Relevant)
+  - name: patterns
+    path: skills/patterns/SKILL.md
+    priority: P1
+    keywords:
+      - component
+      - react
+      - frontend
+      - agent
+      - architecture
+      - prompt
+      - tool
+      - documentation
+    file_patterns:
+      - "frontend/src/components/**"
+      - "backend/app/agents/**"
+      - "backend/libs/agent_framework/**"
+    description: "Code patterns - frontend components, agent architecture, documentation"
+
+  - name: repository-hygiene
+    path: skills/repository-hygiene/SKILL.md
+    priority: P1
+    keywords:
+      - root
+      - directory
+      - file
+      - location
+      - cleanup
+      - organize
+      - commit
+    file_patterns:
+      - "*.sh"
+      - "*.py"
+      - "*.md"
+    description: "File organization rules - no test scripts in root, proper locations"
+
+  - name: documentation-protocol
+    path: skills/documentation-protocol/SKILL.md
+    priority: P1
+    keywords:
+      - docs
+      - documentation
+      - readme
+      - plan
+      - spec
+      - create
+      - new
+      - file
+    file_patterns:
+      - "docs/**"
+      - "*.md"
+    description: "Update existing docs, never create new; single source of truth"
+
+  - name: autonomy
+    path: skills/autonomy/SKILL.md
+    priority: P1
+    keywords:
+      - ralph
+      - loop
+      - autonomous
+      - long-running
+      - persistent
+      - iteration
+      - completion
+    file_patterns:
+      - ".claude/ralph-loop.local.md"
+    description: "Ralph loop patterns for long-running autonomous workflows"
+
+  # P2 - Advisory (Check When Debugging)
+  - name: lessons
+    path: skills/lessons/SKILL.md
+    priority: P2
+    keywords:
+      - error
+      - bug
+      - problem
+      - issue
+      - fix
+      - debug
+      - mistake
+      - wrong
+    file_patterns: []
+    description: "Anti-patterns and incidents - read to avoid repeated mistakes"
+
+# Archive location for old skills
+archive: skills/archive/
+
+# Critical rule from 2026-01-12 incident
+archival_governance:
+  rule: "Never archive without extracting key principles to active skill"
+  never_archive_categories:
+    - meta/governance
+    - safety
+    - operational
+    - quality
+  human_approval_required_for: "consolidations affecting >5 skills"
+
+# How skills improve
+improvement:
+  on_failure: "flag_for_skill_review"
+  on_success: "track_skill_usage"
+  lessons_growth: "append_on_incident"
