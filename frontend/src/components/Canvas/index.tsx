@@ -115,8 +115,8 @@ export default function Canvas() {
         fitView
         className="bg-cc-bg"
       >
-        <Controls className="bg-cc-surface border-cc-border" />
-        <MiniMap className="bg-cc-surface" />
+        <Controls className="!bg-cc-surface !border !border-cc-border rounded-xl shadow-lg" />
+        <MiniMap className="!bg-cc-surface !border !border-cc-border rounded-xl shadow-lg" />
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
       </ReactFlow>
     </div>

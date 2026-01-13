@@ -1,31 +1,38 @@
 import React from 'react'
-import { Handle, Position } from '@xyflow/react'
+import { Handle, Position, NodeProps } from '@xyflow/react'
 import { Sparkles } from 'lucide-react'
+import { NodeShell } from './NodeShell'
 
-interface InsightNodeProps {
-  data: {
-    label: string
-    importance?: number
-  }
+type InsightNodeData = {
+  label: string
+  importance?: number
 }
 
-const InsightNode = React.memo(({ data }: InsightNodeProps) => {
+export default React.memo(function InsightNode(props: NodeProps<InsightNodeData>) {
+  const { data, selected } = props
+  const importance = data?.importance
+
+  const badge =
+    typeof importance === 'number' ? (
+      <span className="text-[11px] px-2 py-0.5 rounded bg-purple-500/15 text-purple-300">
+        {Math.round(importance)}%
+      </span>
+    ) : null
+
   return (
-    <div className="bg-cc-surface border-2 border-purple-500/50 rounded-lg px-4 py-3 min-w-[200px]">
-      <Handle type="target" position={Position.Top} className="!bg-purple-500" />
-
-      <div className="flex items-center gap-2 mb-2">
-        <Sparkles className="w-4 h-4 text-purple-500" />
-        <span className="text-xs text-purple-500 uppercase font-medium">Insight</span>
-      </div>
-
-      <p className="text-white text-sm">{data.label}</p>
-
-      <Handle type="source" position={Position.Bottom} className="!bg-purple-500" />
+    <div>
+      <Handle type="target" position={Position.Top} className="!bg-purple-400" />
+      <NodeShell
+        title="Insight"
+        icon={<Sparkles className="w-4 h-4" />}
+        accentTextClass="text-purple-300"
+        accentBorderClass="border-purple-500/35"
+        badge={badge}
+        selected={selected}
+      >
+        <p className="text-cc-text text-sm leading-snug">{data?.label}</p>
+      </NodeShell>
+      <Handle type="source" position={Position.Bottom} className="!bg-purple-400" />
     </div>
   )
 })
-
-InsightNode.displayName = 'InsightNode'
-
-export default InsightNode

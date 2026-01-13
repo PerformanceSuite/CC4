@@ -3,22 +3,23 @@ import { Handle, Position, NodeProps } from '@xyflow/react'
 import { ProgressRing } from '../components/ProgressRing'
 import { runMockTask } from '../mock/mockTaskProgress'
 import { useTaskProgressStore } from '../../../stores/taskProgressStore'
+import { NodeShell } from './NodeShell'
+import { ListChecks } from 'lucide-react'
 
 type TaskProgressNodeData = {
   taskId: string
 }
 
-export default function TaskProgressNode({ data }: NodeProps<TaskProgressNodeData>) {
+export default function TaskProgressNode({ data, selected }: NodeProps<TaskProgressNodeData>) {
   const taskId = data?.taskId ?? 'mock-task-1'
   const model = useTaskProgressStore((s) => s.tasks[taskId])
 
-  // Kick off mock runner the first time this node mounts (Phase 4 demo).
+  // Kick off mock runner the first time this node mounts
   useEffect(() => {
-    if (!model) runMockTask(taskId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (taskId.startsWith('mock-')) runMockTask(taskId)
   }, [taskId])
 
-  const slices = useMemo(() => {
+  const subtasks = useMemo(() => {
     if (!model) return []
     return model.subtasks.map((s) => ({
       id: s.id,
@@ -33,54 +34,66 @@ export default function TaskProgressNode({ data }: NodeProps<TaskProgressNodeDat
     () => [
       { id: 'open', label: 'Open', hint: 'Open task detail' },
       { id: 'pause', label: 'Pause', hint: 'Pause execution' },
-      { id: 'logs', label: 'Logs', hint: 'View output stream' },
-      { id: 'fork', label: 'Fork', hint: 'Fork into new branch/task' },
+      { id: 'logs', label: 'Logs', hint: 'View output logs' },
     ],
     []
   )
 
+  const overall = model?.progress ?? 0
+
   return (
-    <div className="rounded-2xl bg-cc-surface/70 border border-cc-border shadow-lg px-3 py-3 w-[220px]">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-semibold text-white/90">Task Progress</div>
-        <div className="text-[11px] text-white/55">{model?.status ?? 'running'}</div>
-      </div>
+    <div className="w-[260px]">
+      <Handle type="target" position={Position.Top} className="!bg-cc-accent" />
 
-      <div className="flex items-center justify-center">
-        <ProgressRing
-          progress={model?.progress ?? 0.02}
-          direction={model?.direction ?? 'cw'}
-          label={model?.title ?? 'Implement feature'}
-          size={150}
-          strokeWidth={10}
-          slices={slices}
-          options={options}
-          onOptionClick={(id) => {
-            // Phase 4: wire these to the ActionRing + CommandPalette events later.
-            console.log('[TaskProgressNode option]', id)
-          }}
-        />
-      </div>
+      <NodeShell
+        title="Task Progress"
+        icon={<ListChecks className="w-4 h-4" />}
+        accentTextClass="text-cc-accent"
+        accentBorderClass="border-cc-border"
+        selected={selected}
+        className="bg-cc-surface/80 backdrop-blur"
+        badge={
+          <span className="text-[11px] px-2 py-0.5 rounded bg-cc-border/40 text-cc-muted">
+            {Math.round(overall)}%
+          </span>
+        }
+      >
+        <div className="flex items-start gap-3">
+          <div className="shrink-0">
+            <ProgressRing progress={overall} size={72} thickness={7} />
+          </div>
 
-      {model?.parallelGroups?.length ? (
-        <div className="mt-2 text-[11px] text-white/55">
-          <div className="mb-1">Parallel plan:</div>
-          <div className="flex flex-wrap gap-1">
-            {model.parallelGroups.map((g, idx) => (
-              <span
-                key={idx}
-                className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10"
-                title={g.join(', ')}
-              >
-                {g.length > 1 ? `Group ${idx + 1}: ${g.length}x` : `Stage ${idx + 1}`}
-              </span>
-            ))}
+          <div className="flex-1 min-w-0">
+            <div className="space-y-1.5">
+              {subtasks.slice(0, 4).map((s) => (
+                <div key={s.id} className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-cc-text truncate">{s.label}</span>
+                  <span className="text-[11px] text-cc-muted tabular-nums">{Math.round(s.progress)}%</span>
+                </div>
+              ))}
+            </div>
+
+            {subtasks.length > 4 ? (
+              <div className="mt-2 text-[11px] text-cc-muted">+{subtasks.length - 4} more</div>
+            ) : null}
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {options.map((o) => (
+                <button
+                  key={o.id}
+                  className="text-[11px] px-2 py-1 rounded-md bg-cc-bg border border-cc-border text-cc-text hover:bg-cc-border/40 transition-colors"
+                  title={o.hint}
+                  type="button"
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      ) : null}
+      </NodeShell>
 
-      <Handle type="target" position={Position.Left} className="!bg-cc-accent" />
-      <Handle type="source" position={Position.Right} className="!bg-cc-accent" />
+      <Handle type="source" position={Position.Bottom} className="!bg-cc-accent" />
     </div>
   )
 }

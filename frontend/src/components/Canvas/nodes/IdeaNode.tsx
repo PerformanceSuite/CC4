@@ -1,47 +1,74 @@
-import React from 'react'
-import { Handle, Position } from '@xyflow/react'
+import React, { useMemo } from 'react'
+import { Handle, Position, NodeProps } from '@xyflow/react'
 import { Lightbulb, Sparkles } from 'lucide-react'
+import { NodeShell } from './NodeShell'
 
-interface IdeaNodeProps {
-  data: {
-    label: string
-    status: 'new' | 'processing' | 'crystallized'
-    project_id?: string | null
-    insightCount?: number
-  }
-  selected?: boolean
+type IdeaStatus = 'new' | 'processing' | 'crystallized'
+
+type IdeaNodeData = {
+  label: string
+  status: IdeaStatus
+  project_id?: string | null
+  insightCount?: number
 }
 
-const IdeaNode = React.memo(({ data, selected }: IdeaNodeProps) => {
-  const hasInsights = data.insightCount && data.insightCount > 0
+const STATUS_THEME: Record<IdeaStatus, { border: string; text: string; handle: string; badge: string }> = {
+  new: {
+    border: 'border-yellow-500/35',
+    text: 'text-yellow-300',
+    handle: '!bg-yellow-400',
+    badge: 'bg-yellow-500/15 text-yellow-300',
+  },
+  processing: {
+    border: 'border-sky-500/35',
+    text: 'text-sky-300',
+    handle: '!bg-sky-400',
+    badge: 'bg-sky-500/15 text-sky-300',
+  },
+  crystallized: {
+    border: 'border-purple-500/35',
+    text: 'text-purple-300',
+    handle: '!bg-purple-400',
+    badge: 'bg-purple-500/15 text-purple-300',
+  },
+}
+
+export default React.memo(function IdeaNode(props: NodeProps<IdeaNodeData>) {
+  const { data, selected } = props
+  const status = (data?.status ?? 'new') as IdeaStatus
+  const t = STATUS_THEME[status]
+
+  const insightCount = data?.insightCount ?? 0
+  const hasInsights = insightCount > 0
+
+  const corner = useMemo(() => {
+    if (!hasInsights) return null
+    return (
+      <div
+        className="absolute -top-2 -right-2 flex items-center gap-1 bg-cc-accent text-white text-xs px-2 py-0.5 rounded-full shadow-md"
+        title={`${insightCount} insight${insightCount === 1 ? '' : 's'} available`}
+      >
+        <Sparkles className="w-3 h-3" />
+        <span className="font-medium">{insightCount}</span>
+      </div>
+    )
+  }, [hasInsights, insightCount])
 
   return (
-    <div className="bg-cc-surface border-2 border-yellow-500/50 rounded-lg px-4 py-3 min-w-[200px] relative">
-      <Handle type="target" position={Position.Top} className="!bg-yellow-500" />
-
-      {/* Insight indicator badge */}
-      {hasInsights && (
-        <div
-          className="absolute -top-2 -right-2 flex items-center gap-1 bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full shadow-md"
-          title={`${data.insightCount} insight${data.insightCount > 1 ? 's' : ''} available`}
-        >
-          <Sparkles className="w-3 h-3" />
-          <span className="font-medium">{data.insightCount}</span>
-        </div>
-      )}
-
-      <div className="flex items-center gap-2 mb-2">
-        <Lightbulb className="w-4 h-4 text-yellow-500" />
-        <span className="text-xs text-yellow-500 uppercase font-medium">Idea</span>
-      </div>
-
-      <p className="text-white text-sm">{data.label}</p>
-
-      <Handle type="source" position={Position.Bottom} className="!bg-yellow-500" />
+    <div>
+      <Handle type="target" position={Position.Top} className={t.handle} />
+      <NodeShell
+        title="Idea"
+        icon={<Lightbulb className="w-4 h-4" />}
+        accentTextClass={t.text}
+        accentBorderClass={t.border}
+        badge={<span className={`text-[11px] px-2 py-0.5 rounded ${t.badge}`}>{status.replace('_', ' ')}</span>}
+        corner={corner}
+        selected={selected}
+      >
+        <p className="text-cc-text text-sm leading-snug">{data?.label}</p>
+      </NodeShell>
+      <Handle type="source" position={Position.Bottom} className={t.handle} />
     </div>
   )
 })
-
-IdeaNode.displayName = 'IdeaNode'
-
-export default IdeaNode
