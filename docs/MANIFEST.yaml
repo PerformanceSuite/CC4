@@ -1,0 +1,91 @@
+# Documentation Manifest
+# Machine-readable schema for documentation structure
+
+version: "1.0"
+project: commandcenter-v3
+created: 2026-01-11
+updated: 2026-01-11
+
+# Naming conventions
+naming:
+  format: "{name}-MM-DD-HH:mm.md"
+  rules:
+    - lowercase_only: true
+    - separator: "-"
+    - timestamp_position: end
+    - timestamp_format: "MM-DD-HH:mm"
+    - no_status_prefix: true
+    - no_version_suffix: true
+
+# Directory structure
+directories:
+  specs:
+    description: "WHAT to build - feature requirements"
+    pattern: "{feature-name}-MM-DD-HH:mm.md"
+    
+  plans:
+    description: "HOW/WHEN to build - execution tracking"
+    pattern: "{feature-name}-MM-DD-HH:mm.md"
+    
+  architecture:
+    description: "System design - evergreen documentation"
+    pattern: "{system-name}-MM-DD-HH:mm.md"
+    
+  decisions:
+    description: "ADRs - why we chose X"
+    pattern: "{NNN}-{slug}-MM-DD-HH:mm.md"
+    
+  reference:
+    description: "Guides, how-tos, runbooks"
+    pattern: "{topic}-MM-DD-HH:mm.md"
+
+# Required frontmatter fields
+frontmatter:
+  required:
+    - title
+    - type
+    - status
+    - created
+    - updated
+    - owner
+  optional:
+    - tags
+    - priority
+    - spec_source
+    - progress
+    - current_batch
+    - decision_date
+    - supersedes
+    - superseded_by
+
+# Valid values
+enums:
+  type:
+    - spec
+    - plan
+    - architecture
+    - decision
+    - reference
+    - index
+  status:
+    - draft
+    - active
+    - completed
+    - archived
+    - deprecated
+
+# Forbidden patterns
+forbidden:
+  - "docs/**/*HANDOFF*"
+  - "docs/**/*WIP*"
+  - "docs/**/*-v[0-9]*"
+  - "docs/*.md"  # except index.md
+
+# Exceptions
+exceptions:
+  root_files:
+    - index.md
+    - MANIFEST.yaml
+  legacy_files:
+    - plans/MASTER_PLAN.md  # Heavily referenced, rename later
+    - plans/next_steps.md   # Heavily referenced, rename later
