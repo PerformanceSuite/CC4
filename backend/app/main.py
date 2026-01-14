@@ -25,6 +25,7 @@ from app.services.parallel_execution_runner import (
     initialize_global_worktree_pool,
     cleanup_global_worktree_pool,
 )
+from app.startup import run_startup_validation
 
 # Configure logging
 logging.basicConfig(
@@ -37,16 +38,8 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
-    # Startup
-    logger.info("Initializing database...")
-    await init_db()
-    logger.info("Database initialized")
-
-    logger.info("Initializing worktree pool for parallel execution...")
-    await initialize_global_worktree_pool(pool_size=3, base_dir="../CC4-worktrees")
-    logger.info("Worktree pool ready")
-
-    logger.info(f"CC4 backend starting on {settings.host}:{settings.port}")
+    # Startup - Run validation (exits with code 1 if validation fails)
+    await run_startup_validation(pool_size=3, base_dir="../CC4-worktrees")
 
     yield
 
