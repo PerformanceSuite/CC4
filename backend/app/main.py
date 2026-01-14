@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import init_db
 from app.routers.autonomous import router as autonomous_router
+from app.routers.health import router as health_router
 from app.services.parallel_execution_runner import (
     initialize_global_worktree_pool,
     cleanup_global_worktree_pool,
@@ -75,6 +76,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(autonomous_router)
+app.include_router(health_router)
 
 
 @app.get("/")
@@ -86,12 +88,6 @@ async def root():
         "status": "running",
         "pipeline": "worktree_pool",
     }
-
-
-@app.get("/health")
-async def health():
-    """Health check endpoint."""
-    return {"status": "healthy"}
 
 
 if __name__ == "__main__":
