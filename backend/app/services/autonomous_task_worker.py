@@ -94,7 +94,7 @@ class AutonomousTaskWorker:
                 .join(BatchExecution)
                 .where(
                     BatchExecution.session_id == self.execution_id,
-                    TaskExecution.status == TaskStatus.PENDING
+                    TaskExecution.status == TaskStatus.PENDING.value
                 )
                 .order_by(BatchExecution.batch_number, TaskExecution.task_number)
                 .limit(1)
@@ -103,8 +103,8 @@ class AutonomousTaskWorker:
             task = result.scalar_one_or_none()
 
             if task:
-                # Mark as running immediately
-                task.status = TaskStatus.RUNNING
+                # Mark as in_progress immediately
+                task.status = TaskStatus.IN_PROGRESS.value
                 task.started_at = datetime.now(timezone.utc)
                 await session.commit()
                 await session.refresh(task)
@@ -133,8 +133,7 @@ class AutonomousTaskWorker:
 
             # Execute task using TaskExecutor
             executor = TaskExecutor(
-                task_id=str(task.id),
-                working_dir=str(worktree.path),
+                repo_path=str(worktree.path),
             )
 
             # Get task details
@@ -144,31 +143,51 @@ class AutonomousTaskWorker:
                 )
                 task_obj = result.scalar_one()
 
+                # Extract task data from extra_data JSON field
+                extra = task_obj.extra_data or {}
+                implementation = extra.get("implementation", "")
+                files = extra.get("files", [])
+                verification_steps = extra.get("verification_steps", [])
+                batch_number = extra.get("batch_number", 1)
+
                 # Execute with timeout
                 try:
-                    result = await asyncio.wait_for(
+                    exec_result = await asyncio.wait_for(
                         executor.execute_task(
-                            title=task_obj.title,
-                            description=task_obj.description or "",
+                            task_number=task_obj.task_number,
+                            task_title=task_obj.task_title,
+                            implementation=implementation,
+                            files=files,
+                            verification_steps=verification_steps,
+                            batch_number=batch_number,
+                            auto_merge=False,  # Don't auto-merge, let review process handle it
+                            worktree_path=worktree.path,
                             branch_name=task_obj.branch_name,
                         ),
                         timeout=self.task_timeout_seconds
                     )
 
                     # Update task with results
-                    task_obj.status = TaskStatus.COMPLETED if result.success else TaskStatus.FAILED
-                    task_obj.pr_url = result.pr_url
+                    if exec_result.success:
+                        task_obj.status = TaskStatus.PR_CREATED.value
+                        task_obj.pr_number = exec_result.pr_number
+                        task_obj.pr_url = exec_result.pr_url
+                        # Store commits in the commits JSON field
+                        task_obj.commits = exec_result.commits
+                    else:
+                        task_obj.status = TaskStatus.FAILED.value
+                        task_obj.error = exec_result.error or "Task execution failed"
+
                     task_obj.completed_at = datetime.now(timezone.utc)
-                    task_obj.output_summary = result.summary
 
                     await session.commit()
                     logger.info(f"[{self.worker_id}] Task {task.id} completed: {task_obj.status}")
 
                 except asyncio.TimeoutError:
                     logger.error(f"[{self.worker_id}] Task {task.id} timed out after {self.task_timeout_seconds}s")
-                    task_obj.status = TaskStatus.FAILED
+                    task_obj.status = TaskStatus.FAILED.value
                     task_obj.completed_at = datetime.now(timezone.utc)
-                    task_obj.output_summary = f"Task timed out after {self.task_timeout_seconds}s"
+                    task_obj.error = f"Task timed out after {self.task_timeout_seconds}s"
                     await session.commit()
 
         except Exception as e:
@@ -180,9 +199,9 @@ class AutonomousTaskWorker:
                     select(TaskExecution).where(TaskExecution.id == task.id)
                 )
                 task_obj = result.scalar_one()
-                task_obj.status = TaskStatus.FAILED
+                task_obj.status = TaskStatus.FAILED.value
                 task_obj.completed_at = datetime.now(timezone.utc)
-                task_obj.output_summary = f"Worker error: {str(e)}"
+                task_obj.error = f"Worker error: {str(e)}"
                 await session.commit()
 
         finally:
