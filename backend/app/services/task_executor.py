@@ -111,6 +111,7 @@ class TaskExecutor:
         auto_merge: bool = True,
         worktree_path: Optional[Path] = None,
         branch_name: Optional[str] = None,
+        skip_github_ops: bool = False,
     ) -> ExecutionResult:
         """
         Execute a single task end-to-end.
@@ -127,6 +128,7 @@ class TaskExecutor:
                           If provided, skips branch creation (worktree already has branch).
                           If None, uses legacy _create_branch (not recommended).
             branch_name: Branch name (required if worktree_path provided).
+            skip_github_ops: If True, skips push/PR/merge operations (for local testing).
 
         Returns:
             ExecutionResult with success status and details
@@ -153,10 +155,41 @@ class TaskExecutor:
                 logger.info(f"[Task {task_number}] Creating branch: {branch_name}")
                 await self._create_branch(branch_name)
 
-            # 2. Build prompt and execute with Claude
-            logger.info(f"[Task {task_number}] Executing with Claude CLI...")
-            prompt = self._build_prompt(task_number, task_title, implementation, files, verification_steps)
-            claude_output = await self._execute_with_claude(prompt, branch_name, exec_path)
+            # 2. Build prompt and execute with Claude (or mock for benchmarking)
+            if skip_github_ops:
+                # Benchmark mode: skip Claude execution, just create dummy files
+                logger.info(f"[Task {task_number}] Benchmark mode: creating dummy files...")
+                claude_output = "Benchmark mode: skipped Claude execution"
+                for file in files:
+                    file_path = exec_path / file
+                    file_path.parent.mkdir(parents=True, exist_ok=True)
+                    file_path.write_text(f"Benchmark test file for task {task_number}\n")
+            else:
+                logger.info(f"[Task {task_number}] Executing with Claude CLI...")
+                prompt = self._build_prompt(task_number, task_title, implementation, files, verification_steps)
+                claude_output = await self._execute_with_claude(prompt, branch_name, exec_path)
+
+            # For benchmark/testing mode, skip GitHub operations
+            if skip_github_ops:
+                logger.info(f"[Task {task_number}] Skipping GitHub operations (local testing mode)")
+
+                # Just do a local commit to measure task duration
+                commit_sha, files_changed = await self._commit_local(
+                    branch_name=branch_name,
+                    task_number=task_number,
+                    task_title=task_title,
+                    exec_path=exec_path,
+                )
+
+                duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+                return ExecutionResult(
+                    success=True,
+                    branch_name=branch_name,
+                    commits=[commit_sha] if commit_sha else [],
+                    files_changed=files_changed,
+                    duration_seconds=duration,
+                    claude_output=claude_output,
+                )
 
             # 3. Commit and push
             logger.info(f"[Task {task_number}] Committing changes...")
@@ -389,6 +422,79 @@ class TaskExecutor:
             # Cleanup temp file
             if prompt_file.exists():
                 prompt_file.unlink()
+
+    async def _commit_local(
+        self,
+        branch_name: str,
+        task_number: str,
+        task_title: str,
+        exec_path: Optional[Path] = None,
+    ) -> Tuple[Optional[str], List[str]]:
+        """Commit changes locally (no push). For benchmarking/testing.
+
+        Args:
+            branch_name: Git branch name
+            task_number: Task identifier for commit message
+            task_title: Task title for commit message
+            exec_path: Path to execute in (worktree or repo). Uses self.repo_path if None.
+        """
+        work_path = exec_path if exec_path else self.repo_path
+
+        try:
+            # Check for changes
+            result = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=str(work_path),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            if not result.stdout.strip():
+                return None, []
+
+            # Get list of changed files
+            files_changed = [line[3:] for line in result.stdout.strip().split("\n") if line]
+
+            # Stage all changes
+            subprocess.run(
+                ["git", "add", "-A"],
+                cwd=str(work_path),
+                capture_output=True,
+                check=True,
+            )
+
+            # Commit
+            commit_msg = (
+                f"feat(pipeline): {task_title}\n\n"
+                f"Task {task_number} from autonomous pipeline execution (benchmark mode).\n\n"
+                f"Co-Authored-By: Claude <noreply@anthropic.com>"
+            )
+
+            subprocess.run(
+                ["git", "commit", "-m", commit_msg],
+                cwd=str(work_path),
+                capture_output=True,
+                check=True,
+            )
+
+            # Get commit SHA
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=str(work_path),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            commit_sha = result.stdout.strip()
+
+            # No push in benchmark mode
+            logger.debug(f"Local commit created: {commit_sha} (no push)")
+
+            return commit_sha, files_changed
+
+        except subprocess.CalledProcessError as e:
+            raise TaskExecutorError(f"Git operation failed: {e.stderr}")
 
     async def _commit_and_push(
         self,

@@ -27,8 +27,17 @@ async_session = async_sessionmaker(
 )
 
 # Sync engine for background tasks (avoids greenlet issues)
-# Convert async URL (aiosqlite) to sync URL (sqlite)
-sync_database_url = settings.database_url.replace("sqlite+aiosqlite:", "sqlite:")
+# Convert async URL to sync URL
+if "sqlite+aiosqlite:" in settings.database_url:
+    # SQLite: aiosqlite -> sqlite
+    sync_database_url = settings.database_url.replace("sqlite+aiosqlite:", "sqlite:")
+elif "postgresql+asyncpg:" in settings.database_url:
+    # PostgreSQL: asyncpg -> psycopg2
+    sync_database_url = settings.database_url.replace("postgresql+asyncpg:", "postgresql+psycopg2:")
+else:
+    # Fallback: use as-is
+    sync_database_url = settings.database_url
+
 sync_engine = create_engine(
     sync_database_url,
     echo=False,

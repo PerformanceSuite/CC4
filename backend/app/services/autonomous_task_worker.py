@@ -31,6 +31,7 @@ class AutonomousTaskWorker:
         pool: WorktreePool,
         task_timeout_seconds: float = 1800.0,  # 30 minutes default
         worktree_acquire_timeout: float = 300.0,  # 5 minutes default
+        skip_github_ops: bool = False,  # For benchmarking/testing
     ):
         """
         Initialize autonomous task worker.
@@ -41,12 +42,14 @@ class AutonomousTaskWorker:
             pool: Worktree pool to acquire worktrees from
             task_timeout_seconds: Maximum time for a single task (default: 30 min)
             worktree_acquire_timeout: Maximum time to wait for a worktree (default: 5 min)
+            skip_github_ops: If True, skip push/PR/merge operations (for local testing)
         """
         self.worker_id = worker_id
         self.execution_id = execution_id
         self.pool = pool
         self.task_timeout_seconds = task_timeout_seconds
         self.worktree_acquire_timeout = worktree_acquire_timeout
+        self.skip_github_ops = skip_github_ops
         self.is_running = False
         self.current_task: Optional[TaskExecution] = None
 
@@ -152,7 +155,7 @@ class AutonomousTaskWorker:
         worktree: Optional[WorktreeInfo] = None
 
         try:
-            logger.info(f"[{self.worker_id}] Executing task {task.id} (batch {task.batch_id})")
+            logger.info(f"[{self.worker_id}] Executing task {task.id} (batch {task.batch_execution_id})")
 
             # Acquire worktree from pool
             try:
@@ -198,6 +201,7 @@ class AutonomousTaskWorker:
                             auto_merge=False,  # Don't auto-merge, let review process handle it
                             worktree_path=worktree.path,
                             branch_name=task_obj.branch_name,
+                            skip_github_ops=self.skip_github_ops,
                         ),
                         timeout=self.task_timeout_seconds
                     )

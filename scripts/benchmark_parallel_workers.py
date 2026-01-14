@@ -160,6 +160,7 @@ async def run_workers(
             pool=pool,
             task_timeout_seconds=300.0,  # 5 min per task
             worktree_acquire_timeout=60.0,  # 1 min to acquire
+            skip_github_ops=True,  # Skip GitHub operations for benchmarking
         )
         for i in range(1, num_workers + 1)
     ]
