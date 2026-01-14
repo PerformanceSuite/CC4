@@ -19,7 +19,7 @@ from typing import List
 backend_dir = Path(__file__).parent.parent / "backend"
 sys.path.insert(0, str(backend_dir))
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from app.database import async_session, init_db
 from app.models.autonomous import (
     AutonomousSession,
@@ -112,10 +112,11 @@ async def simulate_worker(
     task_exec_times = []
 
     while True:
-        # Try to get next pending task
+        # Try to get next pending task using atomic update
         async with async_session() as session:
+            # Phase 1: Find next pending task ID
             result = await session.execute(
-                select(TaskExecution)
+                select(TaskExecution.id)
                 .join(BatchExecution)
                 .where(
                     BatchExecution.session_id == session_id,
@@ -123,19 +124,32 @@ async def simulate_worker(
                 )
                 .order_by(BatchExecution.batch_number, TaskExecution.task_number)
                 .limit(1)
-                .with_for_update(skip_locked=True)
             )
-            task = result.scalar_one_or_none()
+            task_id = result.scalar_one_or_none()
 
-            if task is None:
+            if task_id is None:
                 # No more pending tasks
                 break
 
-            # Mark as in progress
-            task.status = TaskStatus.IN_PROGRESS.value
-            task.started_at = datetime.now(timezone.utc)
+            # Phase 2: Atomically claim the task
+            stmt = (
+                update(TaskExecution)
+                .where(
+                    TaskExecution.id == task_id,
+                    TaskExecution.status == TaskStatus.PENDING.value
+                )
+                .values(
+                    status=TaskStatus.IN_PROGRESS.value,
+                    started_at=datetime.now(timezone.utc)
+                )
+            )
+            result = await session.execute(stmt)
             await session.commit()
-            task_id = task.id
+
+            # Check if we actually claimed it
+            if result.rowcount == 0:
+                # Another worker claimed it first, try again
+                continue
 
         # Acquire worktree
         wt_start = time.time()

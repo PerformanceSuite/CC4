@@ -86,11 +86,22 @@ class AutonomousTaskWorker:
             logger.info(f"[{self.worker_id}] Stopped")
 
     async def _get_next_pending_task(self) -> Optional[TaskExecution]:
-        """Find the next pending task to execute."""
+        """
+        Find the next pending task to execute using atomic update.
+
+        Uses a two-phase approach to prevent race conditions with SQLite:
+        1. Find a pending task ID
+        2. Atomically claim it with UPDATE WHERE status=PENDING
+
+        This works better than SELECT...FOR UPDATE with SQLite, which doesn't
+        properly support row-level locking with skip_locked.
+        """
+        from sqlalchemy import update
+
         async with async_session() as session:
-            # Get pending tasks for this execution, ordered by batch and task number
+            # Phase 1: Find next pending task ID
             result = await session.execute(
-                select(TaskExecution)
+                select(TaskExecution.id)
                 .join(BatchExecution)
                 .where(
                     BatchExecution.session_id == self.execution_id,
@@ -98,16 +109,40 @@ class AutonomousTaskWorker:
                 )
                 .order_by(BatchExecution.batch_number, TaskExecution.task_number)
                 .limit(1)
-                .with_for_update(skip_locked=True)  # Skip locked rows (other workers processing)
             )
-            task = result.scalar_one_or_none()
+            task_id = result.scalar_one_or_none()
 
-            if task:
-                # Mark as in_progress immediately
-                task.status = TaskStatus.IN_PROGRESS.value
-                task.started_at = datetime.now(timezone.utc)
-                await session.commit()
-                await session.refresh(task)
+            if not task_id:
+                return None
+
+            # Phase 2: Atomically claim the task
+            # Only succeeds if status is still PENDING (prevents race conditions)
+            stmt = (
+                update(TaskExecution)
+                .where(
+                    TaskExecution.id == task_id,
+                    TaskExecution.status == TaskStatus.PENDING.value  # Critical: only update if still PENDING
+                )
+                .values(
+                    status=TaskStatus.IN_PROGRESS.value,
+                    started_at=datetime.now(timezone.utc)
+                )
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+
+            # Check if we actually claimed the task
+            if result.rowcount == 0:
+                # Another worker claimed it first, return None to try again
+                logger.debug(f"[{self.worker_id}] Task {task_id} was claimed by another worker")
+                return None
+
+            # Fetch the task we just claimed
+            result = await session.execute(
+                select(TaskExecution).where(TaskExecution.id == task_id)
+            )
+            task = result.scalar_one()
+            logger.info(f"[{self.worker_id}] Successfully claimed task {task_id}")
 
             return task
 
