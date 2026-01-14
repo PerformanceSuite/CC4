@@ -1,6 +1,8 @@
 """Application configuration."""
 
+import os
 from functools import lru_cache
+from pathlib import Path
 from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     # Database (SQLite for local dev, PostgreSQL for production)
-    database_url: str = "sqlite+aiosqlite:///./commandcenter2.db"
+    database_url: str = "sqlite+aiosqlite:///./cc4.db"
 
     # Security
     secret_key: str = "change-me-in-production"
@@ -27,11 +29,19 @@ class Settings(BaseSettings):
     # API Keys
     anthropic_api_key: str = ""
     openai_api_key: str = ""
-    github_token: str = ""
+    github_token: str = os.getenv("GITHUB_TOKEN", "")
 
-    # Repository settings
-    default_repo_url: str = "https://github.com/PerformanceSuite/CommandCenter2.0"
+    # GitHub Repository settings (for pipeline)
+    github_repo_owner: str = os.getenv("GITHUB_REPO_OWNER", "PROACTIVA-US")
+    github_repo_name: str = os.getenv("GITHUB_REPO_NAME", "CC4")
     default_branch: str = "main"
+
+    # Repository path (for pipeline execution)
+    repo_path: str = str(Path(__file__).parent.parent.parent)  # Project root
+
+    # Server
+    host: str = "0.0.0.0"
+    port: int = 8001
 
     # Feature Flags
     enable_wander_agent: bool = False

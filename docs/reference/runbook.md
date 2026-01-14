@@ -1,30 +1,32 @@
 ---
-title: Autonomous Pipeline Operations Runbook
+title: CC4 Operations Runbook
 type: reference
 status: active
-created: 2026-01-11
-updated: 2026-01-11
-owner: danger-dan
+created: 2026-01-13
+updated: 2026-01-13 17:30
+owner: daniel
 tags: [operations, pipeline, autonomous, debugging]
 ---
 
-# Autonomous Pipeline Operations Runbook
+# CC4 Operations Runbook
 
 ## Quick Start
 
 ```bash
 # Start backend (NEVER use --reload for autonomous execution)
-cd ~/Projects/CommandCenterV3/backend
+cd ~/Projects/CC4/backend
 source .venv/bin/activate
 uvicorn app.main:app --port 8001
 
-# Run a phase
+# Start frontend
+cd ~/Projects/CC4/frontend
+npm run dev
+
+# Run pipeline (after integration)
 curl -X POST http://localhost:8001/api/v1/autonomous/start \
   -H "Content-Type: application/json" \
   -d '{
-    "plan_path": "/Users/danielconnolly/Projects/CommandCenterV3/docs/plans/MASTER_PLAN.md",
-    "start_batch": 31,
-    "end_batch": 37,
+    "plan_path": "docs/plans/MASTER_PLAN.md",
     "execution_mode": "dagger"
   }'
 ```
@@ -49,21 +51,17 @@ uvicorn app.main:app --port 8001
 uvicorn app.main:app --port 8001 --reload  # DON'T DO THIS
 ```
 
-### 2. Local mode runs sequentially (by design)
+### 2. Use Worktree Pool for parallel execution
 
-**Why:** Multiple tasks running `git checkout` on the same repo causes race conditions.
+**Why:** Multiple tasks on the same repo causes git corruption.
 
-**Symptom:** Only 1 of N tasks succeeds, others fail with "no commits between branches."
+**Solution:** Worktree pool provides isolated working directories.
 
-**Fix applied:** `task_executor.py` forces `max_concurrent=1` in local mode.
-
-**For parallel execution:** Use `"execution_mode": "dagger"` - each task runs in isolated container.
+**Validation:** 92-97% parallel efficiency in PipelineHardening testing.
 
 ### 3. Don't manually intervene during execution
 
 **Why:** Manual commits/reverts pollute git state, causing subsequent tasks to fail.
-
-**Symptom:** "No commits between main and branch" errors.
 
 **Rule:** Let the pipeline complete or fail on its own. Fix issues AFTER execution ends.
 
@@ -71,91 +69,101 @@ uvicorn app.main:app --port 8001 --reload  # DON'T DO THIS
 
 ## Execution Modes
 
-| Mode | Parallelism | Isolation | Speed | Use Case |
-|------|-------------|-----------|-------|----------|
-| `local` | Sequential | None (shared repo) | Slower | Development, debugging |
-| `dagger` | Parallel (4x) | Full (containers) | Faster | Production, large batches |
+| Mode | Parallelism | Isolation | Use Case |
+|------|-------------|-----------|----------|
+| `worktree` | Parallel (92-97%) | High (separate dirs) | Production batches |
+| `local` | Sequential | None (shared repo) | Debugging |
+| `dagger` | Parallel | Full (containers) | CI/CD |
 
-### Local Mode
-- Uses Claude Max subscription (FREE)
-- Runs on host machine
-- Tasks execute one at a time
+### Worktree Pool Mode (Recommended)
+- Each task gets isolated worktree
+- No git race conditions
+- 92-97% parallel efficiency validated
+- Automatic cleanup after task completion
+
+### Local Mode (Sequential Only)
+- Forces `max_concurrent=1`
 - Best for: Debugging, small batches
 
-### Dagger Mode  
-- Uses Claude Max subscription (FREE)
-- Runs in Docker containers
-- Tasks execute in parallel (4 concurrent)
-- Best for: Large batches, production runs
+### Dagger Mode
+- Container-based isolation
+- Full parallel support
+- Best for: CI/CD, production
+
+---
+
+## Pipeline Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    CC4 Autonomous Pipeline                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
+│  │ Plan Parser  │───▶│  Batch       │───▶│  Parallel    │  │
+│  │              │    │  Orchestrator│    │  Orchestrator│  │
+│  └──────────────┘    └──────────────┘    └──────────────┘  │
+│                                                 │            │
+│                                                 ▼            │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
+│  │ Worktree     │◀───│  Execution   │◀───│  Task        │  │
+│  │ Pool         │    │  Worker      │    │  Executor    │  │
+│  └──────────────┘    └──────────────┘    └──────────────┘  │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key Services (After Integration)
+
+| Service | Purpose |
+|---------|---------|
+| `worktree_pool.py` | Manage pool of git worktrees for parallel execution |
+| `parallel_orchestrator.py` | Coordinate parallel task execution |
+| `execution_worker.py` | Worker that processes individual tasks |
+| `task_executor.py` | Execute Claude CLI commands |
+| `batch_orchestrator.py` | Manage batch execution lifecycle |
+| `plan_parser.py` | Parse MASTER_PLAN.md into batches/tasks |
 
 ---
 
 ## Common Failures & Fixes
 
+### "Git corruption during parallel execution"
+
+**Cause:** Multiple tasks accessing same git repo
+
+**Fix:** Use worktree pool (validated in PipelineHardening)
+
+**Verification:**
+```bash
+git fsck --no-progress  # Should show no errors
+```
+
 ### "Claude CLI not found"
 
 **Cause:** PATH doesn't include `/opt/homebrew/bin`
 
-**Fix:** Already applied in `agent_service.py` (lines 338-339, 603)
+**Fix:** Set PATH in subprocess environment
 
 **Verify:**
 ```bash
 which claude  # Should show /opt/homebrew/bin/claude
 ```
 
-### "No commits between main and branch"
-
-**Causes:**
-1. Manual intervention during execution
-2. Git race condition (fixed)
-3. Agent created no files
-
-**Diagnosis:**
-```bash
-git log --oneline origin/main..origin/feature/batch-X-task-Y
-```
-
-**Fix:** Clean up branches and rerun:
-```bash
-git push origin --delete feature/batch-X-task-Y
-# Then rerun the batch
-```
-
-### Tasks stuck in "executing" state
+### "Tasks stuck in executing state"
 
 **Causes:**
 1. Server restarted (--reload bug)
 2. Process killed externally
-3. Timeout (30 min limit)
+3. Timeout exceeded
 
-**Diagnosis:**
-```python
-# Check session status
-from app.database import get_sync_db
-from app.models.autonomous import AutonomousSession
-from sqlalchemy import select
+**Fix:** Check database and mark stuck sessions as failed.
 
-with get_sync_db() as db:
-    result = db.execute(
-        select(AutonomousSession).order_by(AutonomousSession.started_at.desc()).limit(5)
-    )
-    for s in result.scalars():
-        print(f"{s.id}: {s.status} - {s.tasks_completed}/{s.tasks_total}")
-```
-
-**Fix:** Mark stuck sessions as failed:
-```python
-with get_sync_db() as db:
-    session = db.query(AutonomousSession).filter_by(id="exec_XXX").first()
-    session.status = "failed"
-    db.commit()
-```
-
-### Database greenlet errors
+### "Database greenlet errors"
 
 **Cause:** Async DB operations in background tasks
 
-**Fix:** Already applied - all background tasks use `get_sync_db()`
+**Fix:** Use `get_sync_db()` for all background task DB operations
 
 **Pattern:**
 ```python
@@ -181,45 +189,21 @@ curl -s http://localhost:8001/api/v1/autonomous/{execution_id}/status | python3 
 
 ### Watch logs
 ```bash
-tail -f ~/Projects/CommandCenterV3/backend/logs/app.log
+tail -f ~/Projects/CC4/backend/logs/app.log
 ```
 
-### Database queries
-```python
-from app.database import get_sync_db
-from app.models.autonomous import AutonomousSession, TaskExecution, BatchExecution
-from sqlalchemy import select, text
-
-with get_sync_db() as db:
-    # Recent sessions
-    result = db.execute(
-        select(AutonomousSession).order_by(AutonomousSession.started_at.desc()).limit(5)
-    )
-    for s in result.scalars():
-        print(f"{s.id}: {s.status}")
-    
-    # Failed tasks with errors
-    result = db.execute(
-        select(TaskExecution).where(TaskExecution.status == "failed")
-    )
-    for t in result.scalars():
-        print(f"{t.task_number}: {t.error}")
+### Check worktree status
+```bash
+git worktree list
 ```
 
 ---
 
-## Branch Cleanup
+## Cleanup Commands
 
 ### Delete local feature branches
 ```bash
 git branch | grep -E 'feature/|agent/' | xargs git branch -D
-```
-
-### Delete remote feature branches
-```bash
-git branch -r | grep -v main | grep -v HEAD | \
-  sed 's/origin\///' | \
-  xargs -I {} git push origin --delete {}
 ```
 
 ### Prune stale remote references
@@ -228,76 +212,38 @@ git fetch --prune
 git remote prune origin
 ```
 
----
-
-## Architecture
-
+### Clean worktrees
+```bash
+git worktree prune
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Autonomous Pipeline                       │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │ Plan Parser  │───▶│  Batch       │───▶│  Execution   │  │
-│  │              │    │  Orchestrator│    │  Runner      │  │
-│  └──────────────┘    └──────────────┘    └──────────────┘  │
-│                                                 │            │
-│                                                 ▼            │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │ Merge        │◀───│  PR Reviewer │◀───│  Task        │  │
-│  │ Manager      │    │  + Fix Agent │    │  Executor    │  │
-│  └──────────────┘    └──────────────┘    └──────────────┘  │
-│                                                 │            │
-│                                                 ▼            │
-│                                          ┌──────────────┐   │
-│                                          │  Agent       │   │
-│                                          │  Service     │   │
-│                                          │  (Claude CLI)│   │
-│                                          └──────────────┘   │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `services/plan_parser.py` | Parse MASTER_PLAN.md into batches/tasks |
-| `services/batch_orchestrator.py` | Manage batch execution state |
-| `services/execution_runner.py` | Run batches with sync DB operations |
-| `services/task_executor.py` | Execute individual tasks (sequential in local) |
-| `services/agent_service.py` | Run Claude CLI (local or dagger) |
-| `agents/pr_reviewer.py` | Review PRs for quality |
-| `agents/fix_agent.py` | Fix issues found in review |
-| `services/merge_manager.py` | Merge approved PRs |
 
 ---
 
 ## Lessons Learned
 
-### Phase 1-2 (January 2026)
+### From PipelineHardening Validation (2026-01-13)
+
+1. **Worktree isolation works** - 92-97% parallel efficiency
+2. **Error isolation works** - Failed tasks don't affect others
+3. **Git integrity maintained** - All fsck tests passed
+4. **Resource cleanup works** - No orphaned worktrees
+
+### From CC3 Development (2026-01)
 
 1. **subprocess doesn't inherit shell PATH** - Must explicitly add `/opt/homebrew/bin`
-
-2. **--reload + background tasks = disaster** - File creation triggers restart, killing tasks
-
-3. **Parallel git operations corrupt state** - Force sequential in local mode
-
-4. **Manual intervention during execution fails** - Pollutes git state for remaining tasks
-
-5. **Sync DB for background tasks** - Async DB causes greenlet errors in `asyncio.create_task()`
-
-6. **Git commits = source of truth** - Don't maintain separate status files
+2. **--reload + background tasks = disaster** - File creation triggers restart
+3. **Parallel git operations corrupt state** - Must use worktree isolation
+4. **Manual intervention during execution fails** - Pollutes git state
+5. **Sync DB for background tasks** - Async DB causes greenlet errors
 
 ---
 
 ## Version History
 
-| Date | Change | Commit |
-|------|--------|--------|
-| 2026-01-12 | Force sequential local execution | `f66b818` |
-| 2026-01-12 | Add PATH fix to _execute_local | `9107dd9` |
-| 2026-01-12 | Document --reload bug | `ed526c2` |
-| 2026-01-11 | Phase 1 complete | PR #8 |
-| 2026-01-11 | Phase 2.1 complete | PR #9 |
-| 2026-01-12 | Phase 2.2-2.3 complete (agent) | PR #10 |
+| Date | Change |
+|------|--------|
+| 2026-01-13 | Created for CC4 with PipelineHardening integration |
+
+---
+
+*Last Updated: 2026-01-13 17:30*

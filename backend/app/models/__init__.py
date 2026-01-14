@@ -1,20 +1,51 @@
 """
 Module: __init__.py
-Purpose: SQLAlchemy models for CC3 compliance infrastructure
+Purpose: SQLAlchemy models for CC4
 
-Security Classification: CUI
-FedRAMP Controls: AC-2, AU-2, CM-3, SA-10
+Includes:
+- Compliance infrastructure models
+- Autonomous pipeline models
+- Parallel execution models
 """
 
 from .workflow import WorkflowState, WorkflowTransition
 from .evidence import EvidenceRecord, EvidenceChain
 from .control import ControlMapping, ControlStatus
+from .autonomous import (
+    AutonomousSession,
+    BatchExecution,
+    TaskExecution,
+    PRReview,
+    SessionStatus,
+    BatchStatus,
+    TaskStatus,
+)
+from .parallel import (
+    ParallelTestSession,
+    ParallelTestExecution,
+    ParallelSessionStatus,
+    ParallelTestStatus,
+)
 
 __all__ = [
+    # Compliance models
     "WorkflowState",
     "WorkflowTransition",
     "EvidenceRecord",
     "EvidenceChain",
     "ControlMapping",
     "ControlStatus",
+    # Autonomous pipeline models
+    "AutonomousSession",
+    "BatchExecution",
+    "TaskExecution",
+    "PRReview",
+    "SessionStatus",
+    "BatchStatus",
+    "TaskStatus",
+    # Parallel execution models
+    "ParallelTestSession",
+    "ParallelTestExecution",
+    "ParallelSessionStatus",
+    "ParallelTestStatus",
 ]

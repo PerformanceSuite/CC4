@@ -1,8 +1,11 @@
-# Skill Manifest - CommandCenter V3
-# Updated: 2026-01-12 (restored 6 critical skills after knowledge loss incident)
+# Skill Manifest - CC4
+# Updated: 2026-01-13 17:30
 
-version: "3.0"
-updated: 2026-01-12
+version: "4.0"
+updated: 2026-01-13
+
+# CC4: Clean-slate rebuild of CommandCenter
+# Pipeline integration pending from PipelineHardening
 
 # Skill Tiers for Memory Integration
 # HOT: Essence loaded every session (~50 words per skill)
@@ -70,13 +73,12 @@ skills:
       - autonomous
       - credentials
       - oauth
+      - worktree
     file_patterns:
-      - "backend/app/services/agent_service.py"
-      - "backend/app/services/task_executor.py"
-      - "backend/app/services/batch_orchestrator.py"
+      - "backend/app/services/**"
       - "backend/app/routers/autonomous.py"
       - "scripts/*.sh"
-    description: "How to run CC3 - startup, execution modes, pipeline"
+    description: "How to run CC4 - startup, execution modes, pipeline, worktree pool"
 
   # P1 - Required (Check When Relevant)
   - name: patterns
@@ -94,8 +96,7 @@ skills:
     file_patterns:
       - "frontend/src/components/**"
       - "backend/app/agents/**"
-      - "backend/libs/agent_framework/**"
-    description: "Code patterns - frontend components, agent architecture, documentation"
+    description: "Code patterns - frontend components, agent architecture"
 
   - name: repository-hygiene
     path: skills/repository-hygiene/SKILL.md
@@ -180,3 +181,17 @@ improvement:
   on_failure: "flag_for_skill_review"
   on_success: "track_skill_usage"
   lessons_growth: "append_on_incident"
+
+# Pipeline Integration Notes (2026-01-13)
+pipeline_integration:
+  source: "/Users/danielconnolly/Projects/PipelineHardening"
+  status: "validated"
+  key_components:
+    - worktree_pool.py
+    - parallel_orchestrator.py
+    - execution_worker.py
+    - task_executor.py
+  validation_results:
+    efficiency: "92-97%"
+    git_integrity: "all tests passed"
+    error_isolation: "validated"

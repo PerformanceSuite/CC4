@@ -44,64 +44,62 @@ Universal instructions for all AI agents working in this repository.
 6. **Agents:** Features in prompts, not code (patterns)
 7. **Skills:** Never archive without extracting principles (skill-governance)
 
-### Skill Checking Protocol
+---
 
-```bash
-# P0 - Always check at session start
-cat skills/skill-governance/SKILL.md
-cat skills/operations/SKILL.md          # Pipeline work
+## Part 1: Project Context
 
-# P1 - Check when relevant
-cat skills/patterns/SKILL.md            # Code work
-cat skills/repository-hygiene/SKILL.md  # Before commits
-cat skills/documentation-protocol/SKILL.md  # Docs changes
-cat skills/autonomy/SKILL.md            # Long-running tasks
+### CC4 Overview
 
-# P2 - Advisory
-cat skills/lessons/SKILL.md             # When debugging
-```
+CC4 is a clean-slate rebuild of CommandCenter with:
+- **Frontend:** 38 React components (VISLZR Canvas, Dashboard, Execution view)
+- **Backend Models:** 13 Pydantic models (1,723 lines)
+- **Skills System:** 9 active skills, 15+ archived patterns
+- **Pipeline:** Ready for integration from PipelineHardening
+
+### Current Phase
+
+**Phase 1: Pipeline Integration** - Extract hardened pipeline from PipelineHardening.
+
+See `docs/plans/MASTER_PLAN.md` for detailed tasks.
 
 ---
 
-## Part 1: Execution Modes
+## Part 2: Execution Modes
 
-### Dagger Pipeline Mode (Recommended for Autonomous Execution)
+### Worktree Pool Mode (Recommended for Parallel)
 
-When `branch` parameter is specified:
-1. **Clone** fresh from remote into isolated container
-2. **Execute** Claude Code in container
-3. **Commit** changes inside container
-4. **Push** directly to GitHub from container
-5. **No sync** back to host (your local repo unchanged)
+When running parallel tasks:
+1. **Acquire** worktree from pool
+2. **Execute** in isolated working directory
+3. **Commit** changes in worktree
+4. **Push** to feature branch
+5. **Release** worktree back to pool
 
-**Use for:** Parallel agents, autonomous pipeline, CI/CD
+**Benefits:** 92-97% parallel efficiency, no git corruption.
 
-### Dagger Testing Mode
+### Local Mode (Sequential Only)
 
-When `branch` parameter is NOT specified:
-1. **Mount** local repo into container
-2. **Execute** Claude Code
-3. **Sync** changes back to host
+Direct execution on host machine.
+- Forces `max_concurrent=1` to prevent git race conditions
+- Best for: Debugging, single tasks
 
-**Use for:** Development iteration, quick tests
+### Dagger Mode (Container Isolation)
 
-### Local Mode
-
-Direct execution on host machine using Claude Max OAuth.
-
-**Use for:** Single quick tasks, debugging
+Container-based execution with full isolation.
+- Parallel execution supported
+- Each task in separate container
 
 ### Comparison
 
-| Mode | Cost | Parallel | Isolation | Local Changes |
-|------|------|----------|-----------|---------------|
-| `local` | FREE | ❌ | ❌ | ✅ |
-| `dagger` (pipeline) | FREE | ✅ | ✅ | ❌ |
-| `dagger` (testing) | FREE | ❌ | ❌ | ✅ |
+| Mode | Parallel | Isolation | Use Case |
+|------|----------|-----------|----------|
+| `worktree` | Yes (92-97%) | High | Production batches |
+| `local` | No (sequential) | None | Debugging |
+| `dagger` | Yes | Full | CI/CD, production |
 
 ---
 
-## Part 2: Document Management
+## Part 3: Document Management
 
 ### Directory Structure
 
@@ -110,12 +108,13 @@ project-root/
 ├── CLAUDE.md              # Claude Code entry point
 ├── AGENTS.md              # This file
 ├── README.md              # Human-facing overview
-├── NEXT_STEPS.md          # Current priorities
 ├── docs/
 │   ├── specs/
 │   │   └── commandcenter3.md  # THE source of truth
-│   └── plans/
-│       └── MASTER_PLAN.md     # Master execution plan
+│   ├── plans/
+│   │   └── MASTER_PLAN.md     # Master execution plan (ONLY plan)
+│   └── reference/
+│       └── runbook.md         # Operations guide
 └── skills/                    # Project skills
 ```
 
@@ -128,7 +127,7 @@ project-root/
 
 ---
 
-## Part 3: Coding Standards
+## Part 4: Coding Standards
 
 ### Python
 - Type hints everywhere
@@ -152,7 +151,7 @@ type: feat | fix | docs | refactor | test | chore
 
 ---
 
-## Part 4: Using the Pipeline
+## Part 5: Using the Pipeline (After Integration)
 
 ### Start Execution
 
@@ -160,7 +159,7 @@ type: feat | fix | docs | refactor | test | chore
 curl -X POST http://localhost:8001/api/v1/autonomous/start \
   -H "Content-Type: application/json" \
   -d '{
-    "plan_path": "docs/plans/supervised-test-plan.md",
+    "plan_path": "docs/plans/MASTER_PLAN.md",
     "execution_mode": "dagger"
   }'
 ```
@@ -168,11 +167,11 @@ curl -X POST http://localhost:8001/api/v1/autonomous/start \
 ### Monitor Progress
 
 ```bash
-# Via WebSocket
-ws://localhost:8001/ws/autonomous/{execution_id}
-
 # Via REST
 curl http://localhost:8001/api/v1/autonomous/{execution_id}/status
+
+# Via WebSocket
+ws://localhost:8001/ws/autonomous/{execution_id}
 ```
 
 ### Execution Flow
@@ -180,9 +179,9 @@ curl http://localhost:8001/api/v1/autonomous/{execution_id}/status
 ```
 Plan → Parse → For each batch:
                   │
-                  ├─ Task 1 ──► Container ──► PR ──► Review ──► Merge
-                  ├─ Task 2 ──► Container ──► PR ──► Review ──► Merge
-                  └─ Task N ──► Container ──► PR ──► Review ──► Merge
+                  ├─ Task 1 ──► Worktree ──► PR ──► Review ──► Merge
+                  ├─ Task 2 ──► Worktree ──► PR ──► Review ──► Merge
+                  └─ Task N ──► Worktree ──► PR ──► Review ──► Merge
                   │
                   ▼
               Next Batch
@@ -190,29 +189,16 @@ Plan → Parse → For each batch:
 
 ---
 
-## Part 5: Key Services
+## Part 6: Key Services (After Integration)
 
 | Service | Purpose |
 |---------|---------|
-| `agent_service.py` | Execute agents (local/dagger) |
+| `worktree_pool.py` | Manage pool of git worktrees |
+| `parallel_orchestrator.py` | Coordinate parallel execution |
+| `execution_worker.py` | Worker that processes tasks |
+| `task_executor.py` | Execute individual tasks |
 | `batch_orchestrator.py` | Manage batch lifecycle |
-| `task_executor.py` | Task → PR → Review → Merge |
 | `plan_parser.py` | Parse markdown plans |
-| `pr_reviewer.py` | Automated code review |
-| `fix_agent.py` | Apply review feedback |
-| `merge_manager.py` | Merge PRs + cleanup |
-
----
-
-## Part 6: Key Endpoints
-
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /health` | Health check |
-| `POST /api/v1/autonomous/start` | Start pipeline |
-| `GET /api/v1/autonomous/{id}/status` | Get status |
-| `POST /api/v1/agents/run` | Run single agent |
-| `POST /api/v1/chat/stream` | Chat with context |
 
 ---
 
@@ -220,10 +206,9 @@ Plan → Parse → For each batch:
 
 | Need | Do This |
 |------|---------|
-| What to work on | Read `NEXT_STEPS.md` |
-| Current plan | Read `docs/plans/MASTER_PLAN.md` |
+| What to work on | Read `docs/plans/MASTER_PLAN.md` |
 | Feature spec | Read `docs/specs/commandcenter3.md` |
-| Run pipeline | `curl -X POST .../autonomous/start` |
+| Operations guide | Read `docs/reference/runbook.md` |
 | Check skills | `cat skills/<name>/SKILL.md` |
 
 ---
