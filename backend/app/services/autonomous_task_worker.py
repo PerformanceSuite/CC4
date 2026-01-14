@@ -8,8 +8,8 @@ from pathlib import Path
 
 from .worktree_pool import WorktreePool, WorktreeInfo, WorktreeAcquisitionTimeout
 from .task_executor import TaskExecutor
-from app.database import async_session_maker
-from app.models.autonomous import ExecutionSession, BatchExecution, TaskExecution, TaskStatus
+from app.database import async_session
+from app.models.autonomous import AutonomousSession, BatchExecution, TaskExecution, TaskStatus
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -58,9 +58,9 @@ class AutonomousTaskWorker:
         try:
             while self.is_running:
                 # Check if execution is still active
-                async with async_session_maker() as session:
+                async with async_session() as session:
                     result = await session.execute(
-                        select(ExecutionSession).where(ExecutionSession.id == self.execution_id)
+                        select(AutonomousSession).where(AutonomousSession.id == self.execution_id)
                     )
                     exec_session = result.scalar_one_or_none()
 
@@ -87,13 +87,13 @@ class AutonomousTaskWorker:
 
     async def _get_next_pending_task(self) -> Optional[TaskExecution]:
         """Find the next pending task to execute."""
-        async with async_session_maker() as session:
+        async with async_session() as session:
             # Get pending tasks for this execution, ordered by batch and task number
             result = await session.execute(
                 select(TaskExecution)
                 .join(BatchExecution)
                 .where(
-                    BatchExecution.execution_id == self.execution_id,
+                    BatchExecution.session_id == self.execution_id,
                     TaskExecution.status == TaskStatus.PENDING
                 )
                 .order_by(BatchExecution.batch_number, TaskExecution.task_number)
@@ -138,7 +138,7 @@ class AutonomousTaskWorker:
             )
 
             # Get task details
-            async with async_session_maker() as session:
+            async with async_session() as session:
                 result = await session.execute(
                     select(TaskExecution).where(TaskExecution.id == task.id)
                 )
@@ -175,7 +175,7 @@ class AutonomousTaskWorker:
             logger.error(f"[{self.worker_id}] Error executing task {task.id}: {e}", exc_info=True)
 
             # Mark task as failed
-            async with async_session_maker() as session:
+            async with async_session() as session:
                 result = await session.execute(
                     select(TaskExecution).where(TaskExecution.id == task.id)
                 )

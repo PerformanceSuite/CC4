@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 
 from .worktree_pool import WorktreePool
 from .autonomous_task_worker import AutonomousTaskWorker
-from app.database import async_session_maker
-from app.models.autonomous import ExecutionSession, BatchExecution, TaskExecution
+from app.database import async_session
+from app.models.autonomous import AutonomousSession, BatchExecution, TaskExecution
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -30,7 +30,7 @@ async def initialize_global_worktree_pool(pool_size: int = 3, base_dir: str = ".
     _global_worktree_pool = WorktreePool(
         pool_size=pool_size,
         base_dir=base_dir,
-        repo_path=".",
+        main_repo_path="..",  # Project root is one level up from backend/
     )
 
     await _global_worktree_pool.initialize()
