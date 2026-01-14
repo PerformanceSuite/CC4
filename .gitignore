@@ -45,3 +45,6 @@ logs/
 *.tmp
 .cache/
 *.db
+
+# Git worktrees (parallel execution)
+CC4-worktrees/

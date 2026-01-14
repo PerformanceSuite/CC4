@@ -21,6 +21,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import init_db
 from app.routers.autonomous import router as autonomous_router
+from app.services.parallel_execution_runner import (
+    initialize_global_worktree_pool,
+    cleanup_global_worktree_pool,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -37,12 +41,20 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database...")
     await init_db()
     logger.info("Database initialized")
+
+    logger.info("Initializing worktree pool for parallel execution...")
+    await initialize_global_worktree_pool(pool_size=3, base_dir="../CC4-worktrees")
+    logger.info("Worktree pool ready")
+
     logger.info(f"CC4 backend starting on {settings.host}:{settings.port}")
 
     yield
 
     # Shutdown
     logger.info("Shutting down CC4 backend...")
+    logger.info("Cleaning up worktree pool...")
+    await cleanup_global_worktree_pool()
+    logger.info("Worktree pool cleaned up")
 
 
 app = FastAPI(

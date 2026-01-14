@@ -17,6 +17,7 @@ from app.schemas.autonomous import (
 )
 from app.services.batch_orchestrator import BatchOrchestrator, OrchestratorError
 from app.services.execution_runner import start_background_execution
+from app.services.parallel_execution_runner import start_parallel_execution
 from app.models.autonomous import BatchExecution, TaskExecution
 
 logger = logging.getLogger(__name__)
@@ -46,9 +47,14 @@ async def start_autonomous_execution(
 
         batches_scheduled = list(range(request.start_batch, request.end_batch + 1))
 
-        # Trigger background execution
-        logger.info(f"Started execution {session.id}, triggering background execution...")
-        await start_background_execution(session.id)
+        # Trigger background execution (parallel or sequential based on execution_mode)
+        if request.execution_mode == "local":
+            logger.info(f"Started execution {session.id}, triggering sequential execution...")
+            await start_background_execution(session.id)
+        else:
+            # Use parallel execution for "parallel" or "dagger" mode
+            logger.info(f"Started execution {session.id}, triggering parallel execution...")
+            await start_parallel_execution(session.id, num_workers=3)
 
         return StartAutonomousResponse(
             execution_id=session.id,
