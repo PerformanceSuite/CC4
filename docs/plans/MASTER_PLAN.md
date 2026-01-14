@@ -3,7 +3,7 @@ title: CC4 Master Plan - Pipeline Integration to MVP
 type: plan
 status: active
 created: 2026-01-13
-updated: 2026-01-14 21:00
+updated: 2026-01-14 21:05
 owner: daniel
 priority: P0
 spec_source: docs/specs/commandcenter3.md
@@ -27,8 +27,8 @@ CC4 is a clean-slate rebuild of CommandCenter. It contains proven assets from CC
 | Phase | Purpose | Status |
 |-------|---------|--------|
 | 1 | Pipeline Integration | **COMPLETE** |
-| 2 | Pipeline Validation | **COMPLETE** (3/3 tasks done) |
-| 3 | MVP Implementation | **READY TO START** |
+| 2 | Pipeline Validation (Correctness) | **COMPLETE** (3/3 tasks done) |
+| 3 | MVP Implementation + REAL Validation | **READY TO START** |
 | 4 | Final Integration | Pending |
 
 ---
@@ -53,10 +53,13 @@ CC4 is a clean-slate rebuild of CommandCenter. It contains proven assets from CC
 - Database switched back to SQLite (default)
 
 ✅ **Ready for Phase 3:**
-- 4 commits ahead of origin (Phase 1 + Phase 2 work)
+- 5 commits pushed to origin (Phase 1 + Phase 2 work)
 - System in clean baseline state
 - No test artifacts or temporary files
-- Pipeline validated and production-ready
+- Pipeline validated for correctness, ready for production-scale testing
+
+**Phase 3 Strategy:**
+Phase 3 serves dual purpose - build 18 CC4 features AND validate the pipeline with real workloads. Phase 2 proved correctness with mock tasks; Phase 3 will measure true 90%+ efficiency with real Claude CLI tasks taking minutes (vs milliseconds in mocks).
 
 ### What CC4 Has
 
@@ -327,13 +330,30 @@ The 92-97% efficiency in PipelineHardening was achieved with **real Claude CLI t
 
 **Key Validation:** Zero task over-execution achieved through atomic UPDATE pattern. All tasks execute exactly once with perfect correctness.
 
+**Note:** Phase 2 validated correctness with mock tasks. **Phase 3 will be the REAL validation** - using the pipeline to build actual CC4 features with real Claude CLI tasks (minutes each), full GitHub workflow (PR creation, reviews, merges), and measuring true 90%+ parallel efficiency at scale (18 tasks across 6 batches).
+
 ---
 
-## Phase 3: MVP Implementation
+## Phase 3: MVP Implementation & Production Validation
 
 ### Overview
 
-Build CC4 features using the validated pipeline.
+**Dual Purpose:**
+1. **Build CC4 features** using the pipeline (18 tasks across 6 batches)
+2. **Real-world validation** of the pipeline at production scale
+
+**Why Phase 3 is the REAL validation:**
+- Phase 2 used mock tasks (0.1s) that couldn't measure true efficiency
+- Phase 3 uses **real Claude CLI tasks** (minutes each) = accurate efficiency measurement
+- Full GitHub workflow: branch → PR → review → merge (not skipped like in Phase 2.3)
+- Tests parallel execution at scale (6 batches, 18 total tasks)
+- Validates 90%+ efficiency with real workloads where coordination overhead is <2%
+
+**Expected Outcomes:**
+- ✅ 18 working CC4 features implemented
+- ✅ Parallel efficiency measured at 90-97% (vs 68% in Phase 2 mocks)
+- ✅ Full PR workflow validated (creation, reviews, merges)
+- ✅ Production-scale validation complete
 
 **Duration:** 8-12 hours
 **Prerequisites:** Phase 2 complete
@@ -537,4 +557,4 @@ With real workloads (minutes per task), coordination overhead becomes <2% of tot
 
 ---
 
-*Last Updated: 2026-01-14 21:00*
+*Last Updated: 2026-01-14 21:05*
