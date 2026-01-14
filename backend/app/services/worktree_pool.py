@@ -274,16 +274,17 @@ class WorktreePool:
             return
 
         try:
-            # Checkout main to ensure clean state
+            # Checkout worktree's own branch to ensure clean state
+            # (can't checkout 'main' in worktree since it's checked out in main repo)
             subprocess.run(
-                ["git", "checkout", "-f", "main"],
+                ["git", "checkout", "-f", worktree.branch],
                 cwd=str(worktree.path),
                 capture_output=True,
                 timeout=30,
                 check=True,
             )
 
-            # Reset to main
+            # Reset worktree branch to match origin/main
             subprocess.run(
                 ["git", "reset", "--hard", "origin/main"],
                 cwd=str(worktree.path),

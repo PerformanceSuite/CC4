@@ -122,7 +122,7 @@ class AutonomousTaskWorker:
             # Acquire worktree from pool
             try:
                 worktree = await asyncio.wait_for(
-                    self.pool.acquire(task_id=str(task.id)),
+                    self.pool.acquire(test_name=str(task.id)),
                     timeout=self.worktree_acquire_timeout
                 )
                 logger.info(f"[{self.worker_id}] Acquired {worktree.id} for task {task.id}")
@@ -207,7 +207,7 @@ class AutonomousTaskWorker:
         finally:
             # Always release worktree back to pool
             if worktree:
-                await self.pool.release(worktree.id)
+                await self.pool.release(worktree)
                 logger.info(f"[{self.worker_id}] Released {worktree.id}")
 
             self.current_task = None
