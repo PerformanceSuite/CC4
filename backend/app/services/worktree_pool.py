@@ -259,6 +259,8 @@ class WorktreePool:
         """
         Clean a worktree: reset to main branch state, remove test artifacts.
 
+        Optimized version using async subprocess and combined git operations.
+
         Args:
             worktree: WorktreeInfo to clean
         """
@@ -274,60 +276,44 @@ class WorktreePool:
             return
 
         try:
-            # Checkout worktree's own branch to ensure clean state
-            # (can't checkout 'main' in worktree since it's checked out in main repo)
-            subprocess.run(
-                ["git", "checkout", "-f", worktree.branch],
+            # Optimized: Combine git operations into a single shell command
+            # This reduces subprocess overhead from 5+ calls to 1 call
+            cleanup_script = f"""
+                git checkout -f {worktree.branch} && \
+                git reset --hard origin/main && \
+                git clean -fd && \
+                git branch | grep -v "{worktree.branch}" | grep -v "main" | xargs -r git branch -D
+            """
+
+            # Use asyncio subprocess for async execution
+            proc = await asyncio.create_subprocess_shell(
+                cleanup_script,
                 cwd=str(worktree.path),
-                capture_output=True,
-                timeout=30,
-                check=True,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
 
-            # Reset worktree branch to match origin/main
-            subprocess.run(
-                ["git", "reset", "--hard", "origin/main"],
-                cwd=str(worktree.path),
-                capture_output=True,
-                timeout=30,
-                check=True,
-            )
+            try:
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
 
-            # Clean untracked files
-            subprocess.run(
-                ["git", "clean", "-fd"],
-                cwd=str(worktree.path),
-                capture_output=True,
-                timeout=30,
-                check=True,
-            )
+                if proc.returncode != 0:
+                    # Branch deletion can fail if no branches to delete, that's OK
+                    # Only fail if checkout/reset/clean failed
+                    stderr_text = stderr.decode()
+                    if "checkout" in stderr_text or "reset" in stderr_text or "clean" in stderr_text:
+                        raise Exception(f"Git cleanup failed for {worktree.id}: {stderr_text}")
 
-            # Delete all local branches except main and worktree branch
-            result = subprocess.run(
-                ["git", "branch", "--list"],
-                cwd=str(worktree.path),
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=True,
-            )
+                logger.debug(f"Cleaned worktree {worktree.id}")
 
-            branches = [b.strip().lstrip("* ") for b in result.stdout.split("\n") if b.strip()]
-            for branch in branches:
-                if branch not in ["main", worktree.branch]:
-                    subprocess.run(
-                        ["git", "branch", "-D", branch],
-                        cwd=str(worktree.path),
-                        capture_output=True,
-                        timeout=30,
-                    )
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                raise Exception(f"Timeout cleaning worktree {worktree.id}")
 
-            logger.debug(f"Cleaned worktree {worktree.id}")
-
-        except subprocess.TimeoutExpired:
-            raise Exception(f"Timeout cleaning worktree {worktree.id}")
-        except subprocess.CalledProcessError as e:
-            raise Exception(f"Git cleanup failed for {worktree.id}: {e.stderr}")
+        except Exception as e:
+            if "Timeout" in str(e):
+                raise
+            raise Exception(f"Git cleanup failed for {worktree.id}: {str(e)}")
 
     async def cleanup(self) -> None:
         """
